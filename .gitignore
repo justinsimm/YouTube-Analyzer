@@ -1,0 +1,3 @@
+*.tsv  #All tsv files
+*.txt  #All .txt files
+*.csv  #All .csv files
