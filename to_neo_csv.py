@@ -57,8 +57,9 @@ def tsv_to_neo_csv(tsv_path: Path, videos_out: Path, related_out: Path) -> None:
         vwriter = csv.writer(fv, quoting=csv.QUOTE_MINIMAL, lineterminator="\n")
         rwriter = csv.writer(fr, quoting=csv.QUOTE_MINIMAL, lineterminator="\n")
 
-        vwriter.writerow(["videoId","uploader","age","category","length","views","rating","ratingCount","commentCount"])
-        rwriter.writerow(["srcVideoId","dstVideoId"])
+        if (tsv_path == Path("0.tsv")):
+            vwriter.writerow(["videoId","uploader","age","category","length","views","rating","ratingCount","commentCount"])
+            rwriter.writerow(["srcVideoId","dstVideoId"])
 
         for row in parse_tsv_rows(fin):
             if not row:
@@ -83,8 +84,15 @@ def tsv_to_neo_csv(tsv_path: Path, videos_out: Path, related_out: Path) -> None:
 
 def main():
 
+    #Used to parse multiple files
     global DEF_IN
     i = 0
+
+    #Used to clear data from previous operations
+    f = open("videos.csv", "w")
+    f1 = open("related.csv", "w")
+    f.close()
+    f1.close()
 
     while(True):
         try:
