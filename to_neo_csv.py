@@ -71,7 +71,7 @@ def tsv_to_neo_csv(tsv_path: Path, videos_out: Path, related_out: Path) -> None:
 
             video_id = clean_id(row[0])
 
-            # uploader, categoryId, category, metric1, views, rating, ratingCount, commentCount
+            # uploader, age, category, length, views, rating, ratingCount, commentCount
             data = [clean_cell(c) for c in row[1:9]]
 
             vwriter.writerow([video_id] + data)
