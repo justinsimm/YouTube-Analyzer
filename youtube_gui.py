@@ -63,10 +63,12 @@ class YouTubeAnalyzerGUI(tk.Tk):
         ttk.Label(conn_group, text="URI:").grid(row=0, column=0, sticky="e", padx=5, pady=5)
         ttk.Label(conn_group, text="User:").grid(row=1, column=0, sticky="e", padx=5, pady=5)
         ttk.Label(conn_group, text="Password:").grid(row=2, column=0, sticky="e", padx=5, pady=5)
+        ttk.Label(conn_group, text="Results database:").grid(row=3, column=0, sticky="e", padx=5, pady=5)
 
         self.neo_uri_var = tk.StringVar(value="neo4j://127.0.0.1:7687")
         self.neo_user_var = tk.StringVar(value="neo4j")
         self.neo_pass_var = tk.StringVar(value="password")
+        self.neo_dbname_var = tk.StringVar(value="results")
 
         ttk.Entry(conn_group, textvariable=self.neo_uri_var, width=40).grid(
             row=0, column=1, sticky="w", padx=5, pady=5
@@ -76,6 +78,9 @@ class YouTubeAnalyzerGUI(tk.Tk):
         )
         ttk.Entry(conn_group, textvariable=self.neo_pass_var, width=20, show="*").grid(
             row=2, column=1, sticky="w", padx=5, pady=5
+        )
+        ttk.Entry(conn_group, textvariable=self.neo_dbname_var, width=20).grid(
+            row=3, column=1, sticky="w", padx=5, pady=5
         )
 
         # -- Top-k Search -- #
@@ -164,13 +169,13 @@ class YouTubeAnalyzerGUI(tk.Tk):
         ttk.Label(
             info_lbl,
             text=(
-                "This tab is for influence analysis.\n"
-                "influence_analysis.py may run everything at import.\n\n"
+                "The file influence_analysis.py should be run before attempting to retreive the results.\n"
+                "Be sure to set the database parameters there.\n\n"
             ),
             justify="left",
         ).pack(anchor="w", padx=5, pady=5)
 
-        ttk.Button(info_lbl, text="Run PageRank", command=self._on_run_influence).pack(
+        ttk.Button(info_lbl, text="Get PageRank Results", command=self._on_run_influence).pack(
             pady=15
         )
 
@@ -231,9 +236,10 @@ class YouTubeAnalyzerGUI(tk.Tk):
         uri = self.neo_uri_var.get()
         user = self.neo_user_var.get()
         pwd = self.neo_pass_var.get()
+        dbname = self.neo_dbname_var.get()
 
-        self.log(f"Running influence analysis (PageRank) using Neo4j: {uri} ...")
-        t = threading.Thread(target=self._run_influence_work, args=(uri, user, pwd), daemon=True)
+        self.log(f"Obtaining results from influence analysis (PageRank) using Neo4j: {uri} ...\n")
+        t = threading.Thread(target=self._run_influence_work, args=(uri, user, pwd, dbname), daemon=True)
         t.start()
 
     # Worker functions # PLUG IN ALGORITHMS HERE!!!!!!!
@@ -293,14 +299,30 @@ class YouTubeAnalyzerGUI(tk.Tk):
         except Exception as e:
             self.log(f"ERROR while running network aggregation: {e}")
 
-    def _run_influence_work(self, uri, user, pwd):
+    def _run_influence_work(self, uri, user, pwd, dbname):
         
         try:
-            repo_dir = os.path.dirname(os.path.abspath(__file__)) # find algorithm
+            repo_dir = os.path.dirname(os.path.abspath("fetch_results.py")) # find algorithm
             if repo_dir not in sys.path:
                 sys.path.insert(0, repo_dir)
 
-            import influence_analysis
+            import fetch_results
+
+            # Capture stdout from the Spark job
+            buf = io.StringIO()
+            old_stdout = sys.stdout
+            sys.stdout = buf
+
+            try:
+                fetch_results.run_pagerank(uri, user, pwd, dbname)
+            finally:
+                sys.stdout = old_stdout
+
+            output = buf.getvalue()
+            if output.strip():
+                self.log(output)
+            self.log("Page Rank results have been fetched.")
+            
 
         except Exception as e:
             self.log(f"ERROR while running influence analysis: {e}")
