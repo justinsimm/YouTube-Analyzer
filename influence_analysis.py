@@ -10,7 +10,7 @@ url = "neo4j://127.0.0.1:7687"
 username = "neo4j"
 password = ""
 dbname = "neo4j"
-results_db = "results"
+results_db = ""
 
 #Start a Spark session using the required neo4j connector
 spark =  (
