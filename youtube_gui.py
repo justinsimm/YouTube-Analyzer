@@ -8,7 +8,7 @@ All algorithms are assumed to read data directly from Neo4j
 - Search tab: top-k queries (Spark + Neo4j via youtube_search.py)
 - Network Aggregation tab: Neo4j-based aggregation (via network_aggregation.py)
 - Influence Analysis tab: PageRank / influence (via influence_analysis.py)
-- GO TO LINE 239 for algoirthm implementation
+- GO TO LINE 239 for algoirthm implementations
 """
 
 import tkinter as tk
