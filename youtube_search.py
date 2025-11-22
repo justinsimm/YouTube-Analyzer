@@ -40,6 +40,19 @@ def top_k_categories(k, dataframe):
         .orderBy("count", ascending=False) \
         .show(k)
 
+def top_k(k, dataframe, field):
+    newDF = dataframe
+    if field == "category":
+        newDF.groupBy(field).count().orderBy("count", ascending=False).show(k)
+    else:
+        newDF.sort(field, ascending=False).show(k)
+
+def find_in_range(start, end, field, dataframe):
+    newDF = dataframe
+    newDF.filter(f"{field} > {start} AND {field} < {end}").orderBy(field, ascending=False).show()
+
+
+
 def main():
     #nodes = fetchNodes("neo4j://127.0.0.1:7687", "neo4j", "password")
     #print(nodes)
@@ -50,7 +63,7 @@ def main():
         .option("url", "neo4j://127.0.0.1:7687")
         .option("authentication.basic.username", "neo4j")
         .option("authentication.basic.password", "password")
-        .option("database", "videodata")
+        .option("database", "videodata2")
         .option("labels", "Videos")
         .load()
     )
@@ -62,23 +75,29 @@ def main():
         print("2. Top k Viewed Videos")
         print("3. Top k Commented Videos")
         print("4. Top k Most Uploaded Categories")
-        print("5. Quit")
+        print("5. Find Videos Within a Range in Category")
+        print("6. Quit")
         choice = int(input("Enter Input: "))
         if choice < 5:
             k = int(input("Enter k amount: "))
         if choice == 1:
-            top_k_rated(k, newDF)
+            top_k(k, newDF, "ratingCount")
         elif choice == 2:
             start_time = time.time()
-            top_k_views(k, newDF)
+            top_k(k, newDF, "views")
             end_time = time.time()
             elapsed_time = end_time - start_time
             print(elapsed_time)
         elif choice == 3:
-            top_k_comments(k, newDF)
+            top_k(k, newDF, "commentCount")
         elif choice == 4:
-            top_k_categories(k, newDF)
+            top_k(k, newDF, "category")
         elif choice == 5:
+            field = input("Enter category to search: ")
+            start = int(input("Enter start of range: "))
+            end = int(input("Enter end of range: "))
+            find_in_range(start, end, field, newDF)
+        elif choice == 6:
             go = False
     #newDF.sort("views", ascending=False).show(10)
     #graph = createGraphFrame(nodes, edges)
