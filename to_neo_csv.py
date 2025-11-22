@@ -1,12 +1,15 @@
-
+import os
 import csv
 import sys
 from pathlib import Path
 
 # defaults:
 DEF_IN = Path("0.tsv")
-DEF_V = Path("videos.csv")
-DEF_R = Path("related.csv")
+DEF_V = Path("outputs/videos.csv")
+DEF_R = Path("outputs/related.csv")
+
+#tracks how many times a 0.tsv has been accounted for
+i = 0
 
 def strip_outer_quotes(line: str) -> str:
     """Remove exactly one pair of outer quotes if the entire line is quoted."""
@@ -54,12 +57,14 @@ def tsv_to_neo_csv(tsv_path: Path, videos_out: Path, related_out: Path) -> None:
          videos_out.open("a", encoding="utf-8", newline="") as fv, \
          related_out.open("a", encoding="utf-8", newline="") as fr:
 
+
         vwriter = csv.writer(fv, quoting=csv.QUOTE_MINIMAL, lineterminator="\n")
         rwriter = csv.writer(fr, quoting=csv.QUOTE_MINIMAL, lineterminator="\n")
 
-        if (tsv_path == Path("0.tsv")):
+        if (tsv_path == Path("0.tsv") and i == 0):
             vwriter.writerow(["videoId","uploader","age","category","length","views","rating","ratingCount","commentCount"])
             rwriter.writerow(["srcVideoId","dstVideoId"])
+            i += 1
 
         for row in parse_tsv_rows(fin):
             if not row:
@@ -85,34 +90,37 @@ def tsv_to_neo_csv(tsv_path: Path, videos_out: Path, related_out: Path) -> None:
 def main():
 
     #Used to parse multiple files
+    input_dir = os.getcwd() + "\\input"
     global DEF_IN
-    i = 0
 
     #Used to clear data from previous operations
-    f = open("videos.csv", "w")
-    f1 = open("related.csv", "w")
+    f = open("outputs/videos.csv", "w")
+    f1 = open("outputs/related.csv", "w")
     f.close()
     f1.close()
 
-    while(True):
-        try:
-            args = sys.argv[1:]
-            inp = Path(args[0]) if len(args) >= 1 else DEF_IN
-            videos_out = Path(args[1]) if len(args) >= 2 else DEF_V
-            related_out = Path(args[2]) if len(args) >= 3 else DEF_R
+    for file in os.listdir(input_dir):
+        file_path = os.path.join(input_dir, file)
+        file_path = Path(file_path)
 
-            if not inp.exists():
-                raise FileNotFoundError(f"Input TSV not found: {inp}")
+        if os.path.isfile(file_path):
+            try:
+                args = sys.argv[1:]
+                inp = Path(args[0]) if len(args) >= 1 else DEF_IN
+                videos_out = Path(args[1]) if len(args) >= 2 else DEF_V
+                related_out = Path(args[2]) if len(args) >= 3 else DEF_R
 
-            tsv_to_neo_csv(inp, videos_out, related_out)
-            print(f"Wrote: {videos_out.resolve()}")
-            print(f"Wrote: {related_out.resolve()}")
-        
-        except FileNotFoundError:
-            exit()
+                if not file_path.exists():
+                    raise FileNotFoundError(f"Input TSV not found: {inp}")
 
-        i += 1
-        DEF_IN = Path(f"{i}.tsv")
+                tsv_to_neo_csv(file_path, videos_out, related_out)
+                print(f"Wrote: {videos_out.resolve()}")
+                print(f"Wrote: {related_out.resolve()}")
+            
+            except FileNotFoundError:
+                print(f"Could not find file path {file_path}")
+                exit()
+
 
 if __name__ == "__main__":
     main()
