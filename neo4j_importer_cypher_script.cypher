@@ -37,9 +37,9 @@ CALL (row) {
   MERGE (n: `Videos` { `videoId`: row.`videoId` })
   SET n.`videoId` = row.`videoId`
   SET n.`uploader` = row.`uploader`
-  SET n.`categoryId` = toInteger(trim(row.`categoryId`))
+  SET n.`age` = toInteger(trim(row.`age`))
+  SET n.`length` = toInteger(trim(row.`length`))
   SET n.`category` = row.`category`
-  SET n.`metric1` = toInteger(trim(row.`metric1`))
   SET n.`views` = toInteger(trim(row.`views`))
   SET n.`rating` = toFloat(trim(row.`rating`))
   SET n.`ratingCount` = toInteger(trim(row.`ratingCount`))
@@ -53,9 +53,9 @@ CALL (row) {
   MERGE (n: `Videos` { `videoId`: row.`videoId` })
   SET n.`videoId` = row.`videoId`
   SET n.`uploader` = row.`uploader`
-  SET n.`categoryId` = toInteger(trim(row.`categoryId`))
+  SET n.`age` = toInteger(trim(row.`age`))
+  SET n.`length` = toInteger(trim(row.`length`))
   SET n.`category` = row.`category`
-  SET n.`metric1` = toInteger(trim(row.`metric1`))
   SET n.`views` = toInteger(trim(row.`views`))
   SET n.`rating` = toFloat(trim(row.`rating`))
   SET n.`ratingCount` = toInteger(trim(row.`ratingCount`))
