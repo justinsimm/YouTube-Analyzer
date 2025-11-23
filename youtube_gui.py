@@ -11,6 +11,8 @@ All algorithms are assumed to read data directly from Neo4j
 - GO TO LINE 239 for algoirthm implementations
 """
 
+from neo4j import GraphDatabase
+from pathlib import Path
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from tkinter.scrolledtext import ScrolledText
@@ -35,26 +37,30 @@ class YouTubeAnalyzerGUI(tk.Tk):
         self.notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
         # tabs
+        self.setup_frame = ttk.Frame(self.notebook)
         self.search_frame = ttk.Frame(self.notebook)
         self.network_frame = ttk.Frame(self.notebook)
         self.influence_frame = ttk.Frame(self.notebook)
 
+        self.notebook.add(self.setup_frame, text = "Setup")
         self.notebook.add(self.search_frame, text="Search (Top-K)")
         self.notebook.add(self.network_frame, text="Network Aggregation")
         self.notebook.add(self.influence_frame, text="Influence Analysis")
 
         # tab UIs
+        self._build_setup_tab()
         self._build_search_tab()
         self._build_network_tab()
         self._build_influence_tab()
+        
 
         # output
         self.log_widget = ScrolledText(self, height=10, state="disabled")
         self.log_widget.pack(fill=tk.BOTH, expand=False, padx=10, pady=(0, 10))
 
-    # search tab
-    def _build_search_tab(self):
-        frame = self.search_frame
+    #Setup tab
+    def _build_setup_tab(self):
+        frame = self.setup_frame
 
         # Neo4j Connection (all algorithms use)
         conn_group = ttk.LabelFrame(frame, text="Neo4j Connection (used by all algorithms)")
@@ -82,6 +88,29 @@ class YouTubeAnalyzerGUI(tk.Tk):
         ttk.Entry(conn_group, textvariable=self.neo_dbname_var, width=20).grid(
             row=3, column=1, sticky="w", padx=5, pady=5
         )
+
+        #Run tsv to csv
+        import_group = ttk.LabelFrame(frame, text="Import (imports all tsvs in the input dir to neo4j)")
+        import_group.pack(fill=tk.X, padx=10, pady=10)
+
+        ttk.Label(
+            import_group,
+            text=r"Folder should have a path like C:\Users\{username}\.Neo4jDesktop2\Data\dbmss\{database_id}\import",
+            foreground="gray",
+        ).grid(row=0, column=0, columnspan=2, sticky="w", padx=5, pady=5)
+
+        ttk.Label(import_group, text="Neo4j Import Folder:").grid(row=1, column=0, sticky="e", padx=5, pady=5)
+        self.neo_import_folder_var = tk.StringVar(value=r"C:\Users\monke\.Neo4jDesktop2\Data\dbmss\dbms-efaee50c-20eb-41cd-99c0-a556ef2ad97f\import")
+        ttk.Entry(import_group, textvariable=self.neo_import_folder_var, width=60).grid(row=1, column=1, sticky="w", padx=5, pady=5)
+
+        ttk.Button(import_group, text="Run Import", command=self._on_run_import).grid(
+            row=2, column=0, columnspan=2, pady=15
+        )
+        
+
+    # search tab
+    def _build_search_tab(self):
+        frame = self.search_frame
 
         # -- Top-k Search -- #
         search_group = ttk.LabelFrame(frame, text="Search Algorithms (Spark + Neo4j)")
@@ -186,6 +215,23 @@ class YouTubeAnalyzerGUI(tk.Tk):
         ).pack(anchor="w", padx=5, pady=(0, 5))
 
     # button callbacks 
+    def _on_run_import(self):
+        uri = self.neo_uri_var.get()
+        user = self.neo_user_var.get()
+        pwd = self.neo_pass_var.get()
+        import_folder = self.neo_import_folder_var.get()
+
+        if not uri or not user:
+            messagebox.showerror(
+                "Missing Neo4j info",
+                "Please fill in the Neo4j URI and user in the Setup tab.",
+            )
+            return
+        
+        self.log(f"Importing tsvs to Neo4j using uri: {uri} ...\n")
+        t = threading.Thread(target=self._run_setup_work, args=(uri, user, pwd, import_folder), daemon=True)
+        t.start()
+
     def _on_run_search(self):
         try:
             k = self.k_var.get()
@@ -243,6 +289,52 @@ class YouTubeAnalyzerGUI(tk.Tk):
         t.start()
 
     # Worker functions # PLUG IN ALGORITHMS HERE!!!!!!!
+    def _run_setup_work(self, uri, user, pwd, import_folder):
+        try:
+            import to_neo_csv
+
+            #Run the tsv to csv 
+            try:
+                driver = GraphDatabase.driver(uri, auth=(user, pwd))
+
+                driver.close()
+                videos = f"{Path(import_folder).as_posix()}/videos.csv"
+                related = f"{Path(import_folder).as_posix()}/related.csv"
+                to_neo_csv.main(videos, related)
+
+
+            except Exception as e:
+                self.log(f"Error while running the import: {e}")
+
+
+            #Import csvs in output dir to neo4j cluster
+            try:
+                driver = GraphDatabase.driver(uri, auth=(user, pwd))
+
+                params = {
+                    "file_0":  f"file:///videos.csv",
+                    'file_1':  f"file:///related.csv",
+                    'idsToSkip': []
+                }
+
+                query = open("neo4j_importer_cypher_script.cypher").read()
+
+                statements = [s.strip() for s in query.split(";") if s.strip()]
+
+                with driver.session() as session:
+                    for st in statements:
+                        session.run(st, params)
+
+                self.log(f"The files in {Path(os.getcwd()).as_posix()}/input were uploaded to {uri}\n")
+                driver.close()
+
+            except Exception as e:
+                self.log(f"ERROR: Could not import the files from {Path(import_folder).as_posix()} with exception: {e}")
+
+
+        except ImportError as e:
+            self.log(f"ERROR: Could not import to_neo_csv.py: {e}")
+
     def _run_search_work(self, metric, k, uri, user, pwd):
         try:
             import youtube_search 

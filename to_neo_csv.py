@@ -9,7 +9,7 @@ DEF_V = Path("outputs/videos.csv")
 DEF_R = Path("outputs/related.csv")
 
 #tracks how many times a 0.tsv has been accounted for
-i = 0
+header_written = False
 
 def strip_outer_quotes(line: str) -> str:
     """Remove exactly one pair of outer quotes if the entire line is quoted."""
@@ -57,14 +57,15 @@ def tsv_to_neo_csv(tsv_path: Path, videos_out: Path, related_out: Path) -> None:
          videos_out.open("a", encoding="utf-8", newline="") as fv, \
          related_out.open("a", encoding="utf-8", newline="") as fr:
 
+        global header_written
 
         vwriter = csv.writer(fv, quoting=csv.QUOTE_MINIMAL, lineterminator="\n")
         rwriter = csv.writer(fr, quoting=csv.QUOTE_MINIMAL, lineterminator="\n")
 
-        if (tsv_path == Path("0.tsv") and i == 0):
+        if not header_written:
             vwriter.writerow(["videoId","uploader","age","category","length","views","rating","ratingCount","commentCount"])
             rwriter.writerow(["srcVideoId","dstVideoId"])
-            i += 1
+            header_written = True
 
         for row in parse_tsv_rows(fin):
             if not row:
@@ -87,15 +88,15 @@ def tsv_to_neo_csv(tsv_path: Path, videos_out: Path, related_out: Path) -> None:
                 if dst:  
                     rwriter.writerow([video_id, dst])
 
-def main():
+def main(videos, related):
 
     #Used to parse multiple files
     input_dir = os.getcwd() + "\\input"
     global DEF_IN
 
     #Used to clear data from previous operations
-    f = open("outputs/videos.csv", "w")
-    f1 = open("outputs/related.csv", "w")
+    f = open(Path(videos), "w")
+    f1 = open(Path(related), "w")
     f.close()
     f1.close()
 
@@ -106,9 +107,9 @@ def main():
         if os.path.isfile(file_path):
             try:
                 args = sys.argv[1:]
-                inp = Path(args[0]) if len(args) >= 1 else DEF_IN
-                videos_out = Path(args[1]) if len(args) >= 2 else DEF_V
-                related_out = Path(args[2]) if len(args) >= 3 else DEF_R
+                inp = DEF_IN
+                videos_out = Path(videos)
+                related_out = Path(related)
 
                 if not file_path.exists():
                     raise FileNotFoundError(f"Input TSV not found: {inp}")
