@@ -245,10 +245,11 @@ class YouTubeAnalyzerGUI(tk.Tk):
         uri = self.neo_uri_var.get()
         user = self.neo_user_var.get()
         pwd = self.neo_pass_var.get()
+        dbname = self.neo_dbname_var.get()
 
         self.log(f"Running search: metric={metric}, k={k}, neo4j={uri} ...")
         t = threading.Thread(
-            target=self._run_search_work, args=(metric, k, uri, user, pwd), daemon=True
+            target=self._run_search_work, args=(metric, k, uri, user, pwd, dbname), daemon=True
         )
         t.start()
 
@@ -335,10 +336,22 @@ class YouTubeAnalyzerGUI(tk.Tk):
         except ImportError as e:
             self.log(f"ERROR: Could not import to_neo_csv.py: {e}")
 
-    def _run_search_work(self, metric, k, uri, user, pwd):
+    def _run_search_work(self, metric, k, uri, user, pwd, dbname):
         try:
-            import youtube_search 
+            import youtube_search
 
+            # Capture stdout from the Spark job
+            buf = io.StringIO()
+            old_stdout = sys.stdout
+            sys.stdout = buf
+            try:
+                youtube_search.run_top_k(uri, user, pwd, dbname, k, metric)
+            finally:
+                sys.stdout = old_stdout
+
+            output = buf.getvalue()
+            if output.strip():
+                self.log(output)
 
         except ImportError as e:
             self.log(f"ERROR: Could not import youtube_search.py: {e}")

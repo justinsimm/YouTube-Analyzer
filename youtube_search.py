@@ -7,7 +7,7 @@ import sys
 python_executable=sys.executable
 os.environ["PYSPARK_PYTHON"] = python_executable
 os.environ["PYSPARK_DRIVER_PYTHON"] = python_executable
-
+#.config("spark.jars.packages", "org.neo4j:neo4j-connector-apache-spark_2.13:5.3.10_for_spark_3") \
 os.environ["HADOOP_HOME"] = r"C:\hadoop"
 spark = SparkSession.builder \
     .config("neo4j.url", "neo4j://127.0.0.1:7687") \
@@ -51,13 +51,38 @@ def find_in_range(start, end, field, dataframe):
     newDF = dataframe
     newDF.filter(f"{field} > {start} AND {field} < {end}").orderBy(field, ascending=False).show()
 
+def run_top_k(uri, user, password, database, k, searchField):
+    vertices = (
+        spark.read.format("org.neo4j.spark.DataSource")
+        .option("url", uri)
+        .option("authentication.basic.username", user)
+        .option("authentication.basic.password", password)
+        .option("database", database)
+        .option("labels", "Videos")
+        .load()
+    )
+    theDF = vertices.dropna(how="any")
+    return top_k(k, theDF, searchField)
 
+def run_find_in_range(uri, user, password, database, start, end, searchField):
+    vertices = (
+        spark.read.format("org.neo4j.spark.DataSource")
+        .option("url", uri)
+        .option("authentication.basic.username", user)
+        .option("authentication.basic.password", password)
+        .option("database", database)
+        .option("labels", "Videos")
+        .load()
+    )
+    theDF = vertices.dropna(how="any")
+    return find_in_range(start, end, searchField, theDF)
 
-def main():
+""" def main():
     #nodes = fetchNodes("neo4j://127.0.0.1:7687", "neo4j", "password")
     #print(nodes)
     #edges = fetchEdges("neo4j://127.0.0.1:7687", "neo4j", "password")
     #verticesDataFrame, edgesDataFrame = createDataFrame(nodes, edges)
+
     vertices = (
         spark.read.format("org.neo4j.spark.DataSource")
         .option("url", "neo4j://127.0.0.1:7687")
@@ -104,4 +129,4 @@ def main():
     #graph.vertices.orderBy("views", ascending=False).show(10)
 
 if __name__ == "__main__":
-    main()
+    main() """
