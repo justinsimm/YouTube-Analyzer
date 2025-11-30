@@ -398,11 +398,11 @@ class YouTubeAnalyzerGUI(tk.Tk):
     def _run_influence_work(self, uri, user, pwd, dbname):
         
         try:
-            repo_dir = os.path.dirname(os.path.abspath("fetch_results.py")) # find algorithm
+            repo_dir = os.path.dirname(os.path.abspath("influence_analysis.py")) # find algorithm
             if repo_dir not in sys.path:
                 sys.path.insert(0, repo_dir)
 
-            import fetch_results
+            import influence_analysis
 
             # Capture stdout from the Spark job
             buf = io.StringIO()
@@ -410,7 +410,7 @@ class YouTubeAnalyzerGUI(tk.Tk):
             sys.stdout = buf
 
             try:
-                fetch_results.run_pagerank(uri, user, pwd, dbname)
+                influence_analysis.run_pagerank(uri, user, pwd, dbname)
             finally:
                 sys.stdout = old_stdout
 
