@@ -29,6 +29,10 @@ class YouTubeAnalyzerGUI(tk.Tk):
         self.title("YouTube Analyzer")
         self.geometry("900x600")
 
+        #Start spark cluster
+        from start_spark_cluster import start_cluster_win
+        start_cluster_win()
+
         self._create_widgets()
 
    
