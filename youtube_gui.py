@@ -112,40 +112,66 @@ class YouTubeAnalyzerGUI(tk.Tk):
     def _build_search_tab(self):
         frame = self.search_frame
 
-        # -- Top-k Search -- #
+        
         search_group = ttk.LabelFrame(frame, text="Search Algorithms (Spark + Neo4j)")
         search_group.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-        ttk.Label(search_group, text="k (Top-k):").grid(row=0, column=0, sticky="e", padx=5, pady=5)
-        self.k_var = tk.IntVar(value=10)
-        ttk.Entry(search_group, textvariable=self.k_var, width=10).grid(
-            row=0, column=1, sticky="w", padx=5, pady=5
-        )
-
-        ttk.Label(search_group, text="Metric:").grid(row=1, column=0, sticky="e", padx=5, pady=5)
+        ttk.Label(search_group, text="Category:").grid(row=0, column=0, sticky="w", padx=5, pady=(0,5))
         self.metric_var = tk.StringVar(value="views")
 
         metric_frame = ttk.Frame(search_group)
-        metric_frame.grid(row=1, column=1, sticky="w", padx=5, pady=5)
+        metric_frame.grid(row=1, column=0, sticky="w", padx=5, pady=5)
 
         metrics = [
-            ("Top-k Views", "views"),
-            ("Top-k Rating Count", "rating"),
-            ("Top-k Comment Count", "comments"),
-            ("Top-k Categories", "categories"),
+            ("Views", "views"),
+            ("Rating Count", "ratingCount"),
+            ("Comment Count", "commentCount"),
+            ("Categories", "category"),
+            ("Oldest", "age"),
+            ("Length", "length")
         ]
         for text, value in metrics:
             ttk.Radiobutton(metric_frame, text=text, value=value, variable=self.metric_var).pack(anchor="w")
+        # -- Top-k Search -- #
+        ttk.Label(
+            search_group,
+            text="Top K",
+            foreground="black",
+        ).grid(row=2, column=0, columnspan=2, sticky="w", padx=5, pady=(0, 5))
+
+        ttk.Label(search_group, text="k (Top-k):").grid(row=3, column=0, sticky="e", padx=5, pady=5)
+        self.k_var = tk.IntVar(value=10)
+        ttk.Entry(search_group, textvariable=self.k_var, width=10).grid(
+            row=3, column=1, sticky="w", padx=5, pady=5
+        )
 
         ttk.Button(search_group, text="Run Search", command=self._on_run_search).grid(
-            row=2, column=0, columnspan=2, pady=10
+            row=5, column=0, columnspan=2, pady=10
         )
 
         ttk.Label(
             search_group,
-            text="(Wire this button to your functions in youtube_search.py where marked TODO.)",
-            foreground="gray",
-        ).grid(row=3, column=0, columnspan=2, sticky="w", padx=5, pady=(0, 5))
+            text="Find in Range",
+            foreground="black",
+        ).grid(row=6, column=0, columnspan=2, sticky="w", padx=5, pady=(0, 5))
+
+
+        #implementation of find in range
+        ttk.Label(search_group, text="Start:").grid(row=7, column=0, sticky="e", padx=5, pady=5)
+        self.start_var = tk.IntVar(value=10)
+        ttk.Entry(search_group, textvariable=self.start_var, width=10).grid(
+            row=7, column=1, sticky="w", padx=5, pady=5
+        )
+
+        ttk.Label(search_group, text="End:").grid(row=8, column=0, sticky="e", padx=5, pady=5)
+        self.end_var = tk.IntVar(value=1000)
+        ttk.Entry(search_group, textvariable=self.end_var, width=10).grid(
+            row=8, column=1, sticky="w", padx=5, pady=5
+        )
+
+        ttk.Button(search_group, text="Run Search", command=self._on_run_search_range).grid(
+            row=9, column=0, columnspan=2, pady=10
+        )
 
     # -- Network Aggregation -- #
     def _build_network_tab(self):
@@ -253,6 +279,27 @@ class YouTubeAnalyzerGUI(tk.Tk):
         )
         t.start()
 
+    def _on_run_search_range(self):
+        try:
+            start = self.start_var.get()
+            end = self.end_var.get()
+            if start > end or start == end or start < 0 or end < 0:
+                raise ValueError
+        except Exception:
+            messagebox.showerror("Inavlid entry for start or end", "Please enter a valid integer amount for start and end (ex. 1-100)")
+            return
+        
+        metric = self.metric_var.get()
+        uri = self.neo_uri_var.get()
+        user = self.neo_user_var.get()
+        pwd = self.neo_pass_var.get()
+
+        self.log(f"Running search: metric={metric}, start={start}, end={end}, neo4j={uri} ...")
+        t = threading.Thread(
+            target=self._run_search_work_range, args=(metric, start, end, uri, user, pwd), daemon=True
+        )
+        t.start()
+
     def _on_run_network(self):
         uri = self.neo_uri_var.get()
         user = self.neo_user_var.get()
@@ -345,7 +392,27 @@ class YouTubeAnalyzerGUI(tk.Tk):
             old_stdout = sys.stdout
             sys.stdout = buf
             try:
-                youtube_search.run_top_k(uri, user, pwd, dbname, k, metric)
+                youtube_search.run_top_k(uri, user, pwd, "videodata2", k, metric)
+            finally:
+                sys.stdout = old_stdout
+
+            output = buf.getvalue()
+            if output.strip():
+                self.log(output)
+
+        except ImportError as e:
+            self.log(f"ERROR: Could not import youtube_search.py: {e}")
+
+    def _run_search_work_range(self, metric, start, end, uri, user, pwd):
+        try:
+            import youtube_search
+
+            # Capture stdout from the Spark job
+            buf = io.StringIO()
+            old_stdout = sys.stdout
+            sys.stdout = buf
+            try:
+                youtube_search.run_find_in_range(uri, user, pwd, "videodata2", start, end, metric)
             finally:
                 sys.stdout = old_stdout
 

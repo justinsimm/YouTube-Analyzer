@@ -21,25 +21,6 @@ spark = SparkSession.builder \
     #, io.graphframes:graphframes-spark4_2.13:0.10.0
 #from graphframes import GraphFrame
 
-def top_k_rated(k, dataframe):
-    newDF = dataframe
-    newDF.sort("ratingCount", ascending=False).show(k)
-
-def top_k_views(k, dataframe):
-    newDF = dataframe
-    newDF.sort("views", ascending=False).show(k)
-
-def top_k_comments(k, dataframe):
-    newDF = dataframe
-    newDF.sort("commentCount", ascending=False).show(k)
-
-def top_k_categories(k, dataframe):
-    newDF = dataframe
-    newDF.groupBy("category") \
-        .count() \
-        .orderBy("count", ascending=False) \
-        .show(k)
-
 def top_k(k, dataframe, field):
     newDF = dataframe
     if field == "category":
