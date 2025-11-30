@@ -228,8 +228,8 @@ class YouTubeAnalyzerGUI(tk.Tk):
         ttk.Label(
             info_lbl,
             text=(
-                "The file influence_analysis.py should be run before attempting to retreive the results.\n"
-                "Be sure to set the database parameters there.\n\n"
+                "On a large set of data this algorithm is expected to take over an hour.\n"
+                "Data will be stored in the database under a db named results upon completion\n\n"
             ),
             justify="left",
         ).pack(anchor="w", padx=5, pady=5)
@@ -238,11 +238,6 @@ class YouTubeAnalyzerGUI(tk.Tk):
             pady=15
         )
 
-        ttk.Label(
-            info_lbl,
-            text="(After you add run_pagerank(...), update _run_influence_work().)",
-            foreground="gray",
-        ).pack(anchor="w", padx=5, pady=(0, 5))
 
     # button callbacks 
     def _on_run_import(self):

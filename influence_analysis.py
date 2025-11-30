@@ -87,10 +87,10 @@ def run_pagerank(uri, username, password, dbname):
     """
     (
         pagerank_result.vertices.write.format("org.neo4j.spark.DataSource")
-        .option("url", url)
+        .option("url", uri)
         .option("authentication.basic.username", username)
         .option("authentication.basic.password", password)
-        .option("database", results_db)
+        .option("database", "results")
         .mode("Overwrite")
         .option("node.keys", "id")
         .option("labels", ":Video")
