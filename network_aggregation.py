@@ -1,324 +1,337 @@
-from __future__ import annotations
-
-from typing import Optional
-
 import argparse
 import os
 import sys
+import traceback
 
-from neo4j import GraphDatabase
 from pyspark.sql import SparkSession, functions as F
+from pyspark.sql.functions import expr
 
 
 # ---------------------------
-# Spark helpers
+# Logging helper 
 # ---------------------------
-def _build_spark(app_name: str = "YouTubeNetworkAggregation") -> SparkSession:
-    """
-    Create (or reuse) a SparkSession.
-    """
-    spark = (
-        SparkSession.builder
-        .appName(app_name)
-        .getOrCreate()
-    )
-    spark.sparkContext.setLogLevel("WARN")
-    return spark
+
+def log(msg: str) -> None:
+    print(msg, flush=True)
 
 
 # ---------------------------
 # Core aggregation logic
 # ---------------------------
-def _compute_and_output(
-    spark: SparkSession,
-    videos_df,
-    edges_df,
-    out_dir: Optional[str] = None,
-) -> None:
+
+def _compute_aggregation(spark, videos, edges, out_dir: str) -> None:
     """
-    Core logic: given a videos DataFrame and an edges DataFrame, compute:
-
-        1. Global metrics
-        2. Category-level aggregation table
-        3. Per-video node-degree table
-
-    Optionally writes CSVs under out_dir.
+    Core aggregation:
+      - computes in/out degrees
+      - global metrics
+      - category-level metrics
+      - writes CSVs into out_dir
     """
 
-    print("Normalizing input DataFrames...")
-
-    required_video_cols = {"videoId", "category", "views"}
-    required_edge_cols = {"srcVideoId", "dstVideoId"}
-
-    missing_v = required_video_cols - set(videos_df.columns)
-    missing_e = required_edge_cols - set(edges_df.columns)
-
-    if missing_v:
-        raise ValueError(f"videos_df is missing columns: {missing_v}")
-    if missing_e:
-        raise ValueError(f"edges_df is missing columns: {missing_e}")
-
-    videos_df = videos_df.withColumn("views", F.col("views").cast("long"))
-    videos_df = videos_df.fillna({"category": "Unknown"})
-
-    print("Caching videos and edges DataFrames...")
-    videos_df = videos_df.cache()
-    edges_df = edges_df.cache()
-
-    num_videos = videos_df.count()
-    num_edges = edges_df.count()
-    print(f"Input sizes: {num_videos} videos, {num_edges} edges")
-
-    # ---------------------------
-    # Degree computations
-    # ---------------------------
-    print("Computing in/out-degrees per video...")
+    log("[network_aggregation] Computing in/out degrees...")
 
     out_deg = (
-        edges_df
-        .groupBy("srcVideoId")
-        .agg(F.count("*").alias("out_degree"))
+        edges.groupBy("srcVideoId")
+        .agg(F.count("*").alias("outDegree"))
+        .withColumnRenamed("srcVideoId", "videoId")
     )
 
     in_deg = (
-        edges_df
-        .groupBy("dstVideoId")
-        .agg(F.count("*").alias("in_degree"))
+        edges.groupBy("dstVideoId")
+        .agg(F.count("*").alias("inDegree"))
+        .withColumnRenamed("dstVideoId", "videoId")
     )
 
-    v = videos_df.alias("v")
-
-    node_degrees = (
-        v
-        .join(out_deg, v.videoId == out_deg.srcVideoId, how="left")
-        .join(in_deg, v.videoId == in_deg.dstVideoId, how="left")
-        .drop("srcVideoId", "dstVideoId")
-        .fillna({"in_degree": 0, "out_degree": 0})
+    node_deg = (
+        videos
+        .join(out_deg, on="videoId", how="left")
+        .join(in_deg, on="videoId", how="left")
+        .fillna({"outDegree": 0, "inDegree": 0})
     )
 
-    # ---------------------------
-    # Global metrics
-    # ---------------------------
-    print("Computing global metrics...")
+    log("=== VIDEOS SCHEMA ===")
+    videos.printSchema()
+    log("=== EDGES SCHEMA ===")
+    edges.printSchema()
+    log("=== NODE_DEG SAMPLE ===")
+    node_deg.show(5, truncate=False)
 
-    global_metrics_df = node_degrees.agg(
-        F.count("*").alias("num_videos"),
-        F.lit(num_edges).alias("num_edges"),
-        F.avg("in_degree").alias("avg_in_degree"),
-        F.avg("out_degree").alias("avg_out_degree"),
+    log("[network_aggregation] Computing global metrics...")
+
+    num_videos = node_deg.count()
+    num_edges = edges.count()
+
+    global_metrics = spark.createDataFrame(
+        [
+            (
+                num_videos,
+                num_edges,
+                # average degree from node_deg (safer than recomputing)
+                node_deg.agg(F.avg("outDegree")).first()[0],
+                node_deg.agg(F.avg("inDegree")).first()[0],
+            )
+        ],
+        schema="numVideos LONG, numEdges LONG, avgOutDegree DOUBLE, avgInDegree DOUBLE",
     )
 
-    # ---------------------------
-    # Category-level metrics
-    # ---------------------------
-    print("Computing category-level aggregation...")
+    log("=== GLOBAL METRICS ===")
+    global_metrics.show(truncate=False)
 
-    category_agg = (
-        node_degrees
+    log("[network_aggregation] Computing category-level metrics...")
+
+    category_summary = (
+        node_deg
         .groupBy("category")
         .agg(
-            F.count("*").alias("num_videos"),
-            F.sum("views").alias("total_views"),
-            F.avg("views").alias("avg_views"),
-            F.avg("out_degree").alias("avg_out_degree"),
-            F.max("out_degree").alias("max_out_degree"),
-            F.avg("in_degree").alias("avg_in_degree"),
-            F.max("in_degree").alias("max_in_degree"),
+            F.count("*").alias("numVideos"),
+            F.sum("views").alias("totalViews"),
+            F.avg("views").alias("avgViews"),
+            F.avg("rating").alias("avgRating"),
+            F.avg("outDegree").alias("avgOutDegree"),
+            F.avg("inDegree").alias("avgInDegree"),
         )
-        .orderBy(F.desc("total_views"))
+        .orderBy(F.desc("totalViews"))
     )
 
-    # ---------------------------
-    # Show results 
-    # ---------------------------
-    print("\n=== Global Network Metrics ===")
-    global_metrics_df.show(truncate=False)
+    log("=== CATEGORY SUMMARY (FIRST 20 ROWS) ===")
+    category_summary.show(20, truncate=False)
 
-    print("\n=== Category-Level Network Aggregation ===")
-    category_agg.show(truncate=False)
+    log(f"[network_aggregation] Writing outputs to {out_dir} ...")
 
-    print("\n=== Per-Video Node Degree Table (sample) ===")
-    node_degrees.select(
-        "videoId", "category", "views", "in_degree", "out_degree"
-    ).show(20, truncate=False)
+    (
+        global_metrics
+        .coalesce(1)
+        .write
+        .mode("overwrite")
+        .option("header", "true")
+        .csv(f"{out_dir}/global_metrics")
+    )
 
-    # ---------------------------
-    # CSV output
-    # ---------------------------
-    if out_dir:
-        print(f"\nWriting CSV outputs to: {out_dir}")
-        (
-            global_metrics_df.coalesce(1)
-            .write.mode("overwrite")
-            .option("header", "true")
-            .csv(os.path.join(out_dir, "global_metrics"))
-        )
-        (
-            category_agg.coalesce(1)
-            .write.mode("overwrite")
-            .option("header", "true")
-            .csv(os.path.join(out_dir, "category_agg"))
-        )
-        (
-            node_degrees.coalesce(1)
-            .write.mode("overwrite")
-            .option("header", "true")
-            .csv(os.path.join(out_dir, "node_degrees"))
-        )
+    (
+        category_summary
+        .coalesce(1)
+        .write
+        .mode("overwrite")
+        .option("header", "true")
+        .csv(f"{out_dir}/category_summary")
+    )
 
-        print(
-            f"\nWrote CSV outputs under:\n"
-            f"  {out_dir}/global_metrics\n"
-            f"  {out_dir}/category_agg\n"
-            f"  {out_dir}/node_degrees\n"
-        )
+    (
+        node_deg
+        .coalesce(1)
+        .write
+        .mode("overwrite")
+        .option("header", "true")
+        .csv(f"{out_dir}/node_degrees")
+    )
+
+    log("[network_aggregation] Finished writing CSV outputs.")
 
 
 # ---------------------------
-# Neo4j entrypoint 
+# CSV entry
 # ---------------------------
-def run_from_neo4j(uri: str, user: str, password: str, out_dir: str) -> None:
+
+def main(videos_path: str, related_path: str, out_dir: str) -> None:
     """
-    This is what the Tkinter GUI calls.
-
-    It:
-      1. Connects to Neo4j using the provided uri/user/password.
-      2. Pulls the YouTube graph:
-            (v:Videos)
-            (s:Videos)-[:Related_Videos]->(t:Videos)
-      3. Builds Spark DataFrames from the query results.
-      4. Runs the same aggregation logic as the CSV version.
+    CLI entry point: CSV-based aggregation, used by spark-submit.
     """
+    log("[network_aggregation] Starting CSV-based aggregation...")
+    log(f"[network_aggregation] videos={videos_path}")
+    log(f"[network_aggregation] related={related_path}")
+    log(f"[network_aggregation] out_dir={out_dir}")
 
-    print(f"Connecting to Neo4j at {uri} as {user}...")
-    driver = GraphDatabase.driver(uri, auth=(user, password))
+    spark = (
+        SparkSession.builder
+        .appName("YouTubeNetworkAggregationCSV")
+        .getOrCreate()
+    )
+    spark.sparkContext.setLogLevel("WARN")
 
-    with driver.session() as session:
-        print("Pulling video nodes from Neo4j...")
-        video_records = session.run(
-            """
-            MATCH (v:Videos)
-            RETURN
-                v.videoId AS videoId,
-                v.category AS category,
-                v.views AS views
-            """
-        ).data()
-        print(f"Fetched {len(video_records)} videos.")
+    log("[network_aggregation] Loading CSVs...")
 
-        print("Pulling Related_Videos relationships from Neo4j...")
-        edge_records = session.run(
-            """
-            MATCH (s:Videos)-[:Related_Videos]->(t:Videos)
-            RETURN
-                s.videoId AS srcVideoId,
-                t.videoId AS dstVideoId
-            """
-        ).data()
-        print(f"Fetched {len(edge_records)} edges.")
-
-    driver.close()
-
-    if not video_records:
-        print("No Videos nodes found in Neo4j. Aborting network aggregation.")
-        return
-
-    if not edge_records:
-        print("No Related_Videos relationships found in Neo4j. Aborting network aggregation.")
-        return
-
-    print("Starting Spark job for Neo4j-based network aggregation...")
-    spark = _build_spark("YouTubeNetworkAggregationNeo4j")
-
-    videos_df = spark.createDataFrame(video_records)
-    edges_df = spark.createDataFrame(edge_records)
-
-    _compute_and_output(spark, videos_df, edges_df, out_dir)
-    print("Neo4j-based network aggregation completed.")
-    spark.stop()
-
-
-# ---------------------------
-# CSV entrypoint 
-# ---------------------------
-def run_from_csv(videos_path: str, related_path: str, out_dir: str) -> None:
-    """
-    Run the aggregation starting from CSV files (videos.csv, related.csv).
-
-    This is useful for your prof/TA's automated tests and for manual
-    spark-submit runs.
-    """
-    print(f"Loading CSVs:\n  videos={videos_path}\n  related={related_path}")
-    spark = _build_spark("YouTubeNetworkAggregationCSV")
-
-    videos_df = (
+    videos_raw = (
         spark.read
         .option("header", "true")
         .csv(videos_path)
     )
-    edges_df = (
+
+    edges_raw = (
         spark.read
         .option("header", "true")
         .csv(related_path)
     )
 
-    _compute_and_output(spark, videos_df, edges_df, out_dir)
-    print("CSV-based network aggregation completed.")
+    # 2. Clean 
+    log("[network_aggregation] Cleaning / casting CSV columns...")
+
+    videos = (
+        videos_raw.select(
+            "videoId",
+            "uploader",
+            "categoryId",
+            "category",
+            expr("try_cast(metric1 as double)").alias("metric1"),
+            expr("try_cast(views as double)").alias("views"),
+            expr("try_cast(rating as double)").alias("rating"),
+            expr("try_cast(ratingCount as double)").alias("ratingCount"),
+            expr("try_cast(commentCount as double)").alias("commentCount"),
+        )
+    )
+
+    edges = (
+        edges_raw
+        .select(
+            F.col("srcVideoId"),
+            F.col("dstVideoId"),
+        )
+        .where(
+            F.col("srcVideoId").isNotNull()
+            & F.col("dstVideoId").isNotNull()
+        )
+    )
+
+    _compute_aggregation(spark, videos, edges, out_dir)
+
     spark.stop()
+    log("[network_aggregation] CSV-based aggregation complete.")
 
 
 # ---------------------------
-# CLI
+# Neo4j entry
 # ---------------------------
-def _parse_args(argv=None):
-    parser = argparse.ArgumentParser(
-        description="YouTube Network Aggregation (Spark + Neo4j or CSV)."
-    )
 
-    mode = parser.add_mutually_exclusive_group(required=True)
-    mode.add_argument(
-        "--from-csv",
-        action="store_true",
-        help="Read videos/related data from CSV files.",
-    )
-    mode.add_argument(
-        "--from-neo4j",
-        action="store_true",
-        help="Read videos/edges directly from Neo4j.",
-    )
-
-    # CSV inputs
-    parser.add_argument("--videos", help="Path to videos.csv (when using --from-csv).")
-    parser.add_argument("--related", help="Path to related.csv (when using --from-csv).")
-
-    # Neo4j inputs
-    parser.add_argument("--neo4j-uri", help="Neo4j URI, e.g. bolt://localhost:7687")
-    parser.add_argument("--neo4j-user", help="Neo4j username")
-    parser.add_argument("--neo4j-password", help="Neo4j password")
-
-    # Output dir
-    parser.add_argument(
-        "--out",
-        required=True,
-        help="Output directory for CSV results.",
-    )
-
-    return parser.parse_args(argv)
+DEFAULT_NEO4J_DB = "neo4j"  # db name
 
 
-def main(argv=None):
-    args = _parse_args(argv)
+def run_from_neo4j(uri: str, user: str, password: str, out_dir: str, dbname: str = DEFAULT_NEO4J_DB) -> None:
+    """
+    Entry point for the GUI: reads the full graph directly from Neo4j
+    and runs the same aggregation as the CSV-based version.
 
-    if args.from_csv:
-        if not args.videos or not args.related:
-            raise SystemExit("ERROR: --videos and --related are required with --from-csv.")
-        run_from_csv(args.videos, args.related, args.out)
+    Called from youtube_gui.py as:
+        network_aggregation.run_from_neo4j(uri, user, pwd, out_dir)
+    """
 
-    elif args.from_neo4j:
-        if not (args.neo4j_uri and args.neo4j_user and args.neo4j_password):
-            raise SystemExit("ERROR: --neo4j-uri, --neo4j-user, and --neo4j-password are required with --from-neo4j.")
-        run_from_neo4j(args.neo4j_uri, args.neo4j_user, args.neo4j_password, args.out)
+    os.environ["PYSPARK_PYTHON"] = sys.executable
+    os.environ["PYSPARK_DRIVER_PYTHON"] = sys.executable
 
+    log("[network_aggregation] Starting Neo4j-based aggregation...")
+    log(f"[network_aggregation] Neo4j URI={uri} DB={dbname}")
+    log(f"[network_aggregation] out_dir={out_dir}")
+
+    spark = None
+    try:
+        # Build Spark session with Neo4j connector
+        spark = (
+            SparkSession.builder
+            .appName("YouTubeNetworkAggregationNeo4j")
+            .config(
+                "spark.jars.packages",
+                "org.neo4j:neo4j-connector-apache-spark_2.13:5.3.10_for_spark_3",
+            )
+            .config(
+                "spark.jars.repositories",
+                "https://repo1.maven.org/maven2/,https://s01.oss.sonatype.org/content/repositories/releases/"
+            )
+            .getOrCreate()
+        )
+        spark.sparkContext.setLogLevel("WARN")
+
+        # ---- Load Videos from Neo4j ----
+        log("[network_aggregation] Loading :Videos nodes from Neo4j via Spark connector...")
+
+        videos_raw = (
+            spark.read.format("org.neo4j.spark.DataSource")
+            .option("url", uri)
+            .option("authentication.basic.username", user)
+            .option("authentication.basic.password", password)
+            .option("database", dbname)
+            .option("labels", "Videos")
+            .load()
+        )
+
+        videos_count = videos_raw.count()
+        log(f"[network_aggregation] Loaded {videos_count} videos")
+
+        # ---- Load Related_Videos from Neo4j ----
+        log("[network_aggregation] Loading :Related_Videos relationships from Neo4j via Spark connector...")
+
+        edges_raw = (
+            spark.read.format("org.neo4j.spark.DataSource")
+            .option("url", uri)
+            .option("authentication.basic.username", user)
+            .option("authentication.basic.password", password)
+            .option("database", dbname)
+            .option("relationship", "Related_Videos")
+            .option("relationship.source.labels", "Videos")
+            .option("relationship.target.labels", "Videos")
+            .load()
+        )
+
+        edges_count = edges_raw.count()
+        log(f"[network_aggregation] Loaded {edges_count} edges")
+
+        if videos_count == 0:
+            log("[network_aggregation] No videos found in Neo4j. Aborting.")
+            return
+        if edges_count == 0:
+            log("[network_aggregation] No edges found in Neo4j. Aborting.")
+            return
+
+       
+        log("[network_aggregation] Shaping columns for aggregation...")
+
+        videos = (
+            videos_raw.select(
+                "videoId",
+                "uploader",
+                "category",
+                expr("try_cast(views as double)").alias("views"),
+                expr("try_cast(rating as double)").alias("rating"),
+                expr("try_cast(ratingCount as double)").alias("ratingCount"),
+                expr("try_cast(commentCount as double)").alias("commentCount"),
+            )
+        )
+
+        edges = (
+            edges_raw
+            .select(
+                F.col("srcVideoId"),
+                F.col("dstVideoId"),
+            )
+            .where(
+                F.col("srcVideoId").isNotNull()
+                & F.col("dstVideoId").isNotNull()
+            )
+        )
+
+    
+        log("[network_aggregation] Running aggregation on Neo4j data...")
+
+        _compute_aggregation(spark, videos, edges, out_dir)
+
+        log("[network_aggregation] Neo4j-based network aggregation completed.")
+
+    except Exception:
+        log("[network_aggregation] ERROR during Neo4j aggregation:")
+        traceback.print_exc()
+    finally:
+        if spark is not None:
+            log("[network_aggregation] Stopping SparkSession...")
+            spark.stop()
+            log("[network_aggregation] SparkSession stopped.")
+
+
+# ---------------------------
+# CLI 
+# ---------------------------
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--videos", required=True, help="Path to videos.csv")
+    parser.add_argument("--related", required=True, help="Path to related.csv")
+    parser.add_argument("--out", required=True, help="Output directory")
+    args = parser.parse_args()
+
+    main(args.videos, args.related, args.out)
