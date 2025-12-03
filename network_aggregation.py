@@ -13,6 +13,7 @@ def _build_spark(app_name: str = "YouTubeNetworkAggregation") -> SparkSession:
     spark = (
         SparkSession.builder
         .appName(app_name)
+        .master("spark://68.234.244.60:7077")
         .getOrCreate()
     )
     spark.sparkContext.setLogLevel("WARN")

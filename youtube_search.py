@@ -10,6 +10,7 @@ os.environ["PYSPARK_DRIVER_PYTHON"] = python_executable
 #.config("spark.jars.packages", "org.neo4j:neo4j-connector-apache-spark_2.13:5.3.10_for_spark_3") \
 os.environ["HADOOP_HOME"] = r"C:\hadoop"
 spark = SparkSession.builder \
+    .master("spark://68.234.244.60:7077") \
     .config("neo4j.url", "neo4j://127.0.0.1:7687") \
     .config("neo4j.authentication.basic.username", "neo4j") \
     .config("neo4j.authentication.basic.password", "password") \
@@ -40,6 +41,9 @@ def run_top_k(uri, user, password, database, k, searchField):
         .option("authentication.basic.password", password)
         .option("database", database)
         .option("labels", "Videos")
+        .option("partitions", "5")  
+        .option("batch.size", "10000")  
+        .option("transaction.timeout", "600s")
         .load()
     )
     theDF = vertices.dropna(how="any")

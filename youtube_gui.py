@@ -392,7 +392,7 @@ class YouTubeAnalyzerGUI(tk.Tk):
             sys.stdout = buf
             try:
                 # --SWITCH "videodata2" TO YOUR LOCAL DATABASE NAME-- #
-                youtube_search.run_top_k(uri, user, pwd, "videodata2", k, metric)
+                youtube_search.run_top_k(uri, user, pwd, "neo4j", k, metric)
             finally:
                 sys.stdout = old_stdout
 
@@ -413,7 +413,7 @@ class YouTubeAnalyzerGUI(tk.Tk):
             sys.stdout = buf
             try:
                 # --SWITCH "videodata2" TO YOUR LOCAL DATABASE NAME-- #
-                youtube_search.run_find_in_range(uri, user, pwd, "videodata2", start, end, metric)
+                youtube_search.run_find_in_range(uri, user, pwd, "neo4j", start, end, metric)
             finally:
                 sys.stdout = old_stdout
 
