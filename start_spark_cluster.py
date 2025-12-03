@@ -7,4 +7,10 @@ def start_cluster_win():
     worker1 = subprocess.Popen(["spark-class", "org.apache.spark.deploy.worker.Worker", "spark://192.168.1.41:7077"], shell =True)
     worker2 = subprocess.Popen(["spark-class", "org.apache.spark.deploy.worker.Worker", "spark://192.168.1.41:7077"], shell =True)
     worker3 = subprocess.Popen(["spark-class", "org.apache.spark.deploy.worker.Worker", "spark://192.168.1.41:7077"], shell =True)
+    worker4 = subprocess.Popen(["spark-class", "org.apache.spark.deploy.worker.Worker", "spark://192.168.1.41:7077"], shell =True)
+    worker5 = subprocess.Popen(["spark-class", "org.apache.spark.deploy.worker.Worker", "spark://192.168.1.41:7077"], shell =True)
+    worker6 = subprocess.Popen(["spark-class", "org.apache.spark.deploy.worker.Worker", "spark://192.168.1.41:7077"], shell =True)
+    worker7 = subprocess.Popen(["spark-class", "org.apache.spark.deploy.worker.Worker", "spark://192.168.1.41:7077"], shell =True)
+    worker8 = subprocess.Popen(["spark-class", "org.apache.spark.deploy.worker.Worker", "spark://192.168.1.41:7077"], shell =True)
+
 
