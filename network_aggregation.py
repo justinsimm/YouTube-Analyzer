@@ -237,7 +237,6 @@ def run_from_neo4j(uri: str, user: str, password: str, out_dir: str, dbname: str
             )
             .getOrCreate()
         )
-        spark.sparkContext.setLogLevel("WARN")
 
         # ---- Load Videos from Neo4j ----
         log("[network_aggregation] Loading :Videos nodes from Neo4j via Spark connector...")
@@ -304,12 +303,12 @@ def run_from_neo4j(uri: str, user: str, password: str, out_dir: str, dbname: str
         edges = (
             edges_raw
             .select(
-                F.col("srcVideoId"),
-                F.col("dstVideoId"),
+                F.col("`source.VideoId`").alias("srcVideoId"),
+                F.col("`target.videoId`").alias("dstVideoId"),
             )
             .where(
-                F.col("srcVideoId").isNotNull()
-                & F.col("dstVideoId").isNotNull()
+                F.col("`source.VideoId`").isNotNull()
+                & F.col("`target.videoId`").isNotNull()
             )
         )
 

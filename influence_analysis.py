@@ -89,12 +89,13 @@ def run_pagerank(uri, username, password, dbname):
     # Create GraphFrame and run PageRank
     g = GraphFrame(vertices, relationships)
     pagerank_result = g.pageRank(resetProbability=0.15, tol=0.01)
-    pagerank_result.vertices.show()
+    pagerank_result.vertices.orderBy("pagerank", ascending=False).show()
 
     #Output execution time for page rank
     end_time = time.time()
     print(f"PageRank computation time: {end_time - start_time} seconds")
 
+    """
     #Write the page rank results to a different database for later fetching
     (
         pagerank_result.vertices.write.format("org.neo4j.spark.DataSource")
@@ -110,5 +111,8 @@ def run_pagerank(uri, username, password, dbname):
         .option("transaction.timeout", "600s")
         .save()
     )
+    """
+    
+    spark.stop()
 
 

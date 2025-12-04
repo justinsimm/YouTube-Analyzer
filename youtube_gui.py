@@ -59,7 +59,7 @@ class YouTubeAnalyzerGUI(tk.Tk):
         
 
         # output
-        self.log_widget = ScrolledText(self, height=10, state="disabled")
+        self.log_widget = ScrolledText(self, height=20, state="disabled")
         self.log_widget.pack(fill=tk.BOTH, expand=False, padx=10, pady=(0, 10))
 
     #Setup tab
@@ -73,7 +73,7 @@ class YouTubeAnalyzerGUI(tk.Tk):
         ttk.Label(conn_group, text="URI:").grid(row=0, column=0, sticky="e", padx=5, pady=5)
         ttk.Label(conn_group, text="User:").grid(row=1, column=0, sticky="e", padx=5, pady=5)
         ttk.Label(conn_group, text="Password:").grid(row=2, column=0, sticky="e", padx=5, pady=5)
-        ttk.Label(conn_group, text="Results database:").grid(row=3, column=0, sticky="e", padx=5, pady=5)
+        ttk.Label(conn_group, text="Database:").grid(row=3, column=0, sticky="e", padx=5, pady=5)
 
         self.neo_uri_var = tk.StringVar(value="neo4j://127.0.0.1:7687")
         self.neo_user_var = tk.StringVar(value="neo4j")
@@ -215,15 +215,6 @@ class YouTubeAnalyzerGUI(tk.Tk):
             pady=15
         )
 
-        ttk.Label(
-            frame,
-            text=(
-                "(Expected: implement network_aggregation.run_from_neo4j(uri, user, password, out_dir)\n"
-            ),
-            foreground="gray",
-            justify="left",
-        ).pack(anchor="w", padx=15, pady=(0, 10))
-
     # -- Influence Analysis  -- #
     def _build_influence_tab(self):
         frame = self.influence_frame
@@ -235,7 +226,8 @@ class YouTubeAnalyzerGUI(tk.Tk):
             info_lbl,
             text=(
                 "On a large set of data this algorithm is expected to take over an hour.\n"
-                "Data will be stored in the database under a db named results upon completion\n\n"
+                "Data will not be stored in the database under a db named results upon completion\n\n"
+                "This can be changed by uncommenting the write method under influence_analysis.py (WARNING: This takes 10+ minutes\n\n"
             ),
             justify="left",
         ).pack(anchor="w", padx=5, pady=5)
