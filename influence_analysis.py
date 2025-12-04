@@ -56,12 +56,6 @@ def run_pagerank(uri, username, password, dbname):
         .option("relationship", "Related_Videos")
         .option("relationship.source.labels", "Videos")
         .option("relationship.target.labels", "Videos")
-        .option("query", """
-            MATCH (source:Videos)-[r:Related_Videos]->(target:Videos)
-            RETURN id(source) as src, 
-                id(target) as dst,
-                r.* as relationship_properties
-        """)
         .option("partitions", "10")  
         .option("batch.size", "1000") 
         .option("transaction.timeout", "600s") 
@@ -71,8 +65,7 @@ def run_pagerank(uri, username, password, dbname):
 
 
     #reduce the df to just the source and target and prep for graphframe call
-    #relationships = df.select(col("`source.VideoId`").alias("src"), col("`target.VideoId`").alias("dst"))
-    relationships = df.select(col("src"), col("dst"))
+    relationships = df.select(col("`source.VideoId`").alias("src"), col("`target.VideoId`").alias("dst"))
 
     #Extract the nodes into a dataframe
     vertices = (

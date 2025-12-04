@@ -226,6 +226,7 @@ def run_from_neo4j(uri: str, user: str, password: str, out_dir: str, dbname: str
         spark = (
             SparkSession.builder
             .appName("YouTubeNetworkAggregationNeo4j")
+            .master("spark://68.234.244.60:7077")
             .config(
                 "spark.jars.packages",
                 "org.neo4j:neo4j-connector-apache-spark_2.13:5.3.10_for_spark_3",
@@ -248,6 +249,9 @@ def run_from_neo4j(uri: str, user: str, password: str, out_dir: str, dbname: str
             .option("authentication.basic.password", password)
             .option("database", dbname)
             .option("labels", "Videos")
+            .option("partitions", "10")  
+            .option("batch.size", "1000") 
+            .option("transaction.timeout", "600s") 
             .load()
         )
 
@@ -266,6 +270,9 @@ def run_from_neo4j(uri: str, user: str, password: str, out_dir: str, dbname: str
             .option("relationship", "Related_Videos")
             .option("relationship.source.labels", "Videos")
             .option("relationship.target.labels", "Videos")
+            .option("partitions", "10")  
+            .option("batch.size", "1000") 
+            .option("transaction.timeout", "600s") 
             .load()
         )
 

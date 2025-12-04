@@ -10,13 +10,11 @@ os.environ["PYSPARK_DRIVER_PYTHON"] = python_executable
 #.config("spark.jars.packages", "org.neo4j:neo4j-connector-apache-spark_2.13:5.3.10_for_spark_3") \
 os.environ["HADOOP_HOME"] = r"C:\hadoop"
 spark = SparkSession.builder \
-    .master("spark://192.168.1.41:7077") \
+    .master("spark://68.234.244.60:7077") \
     .config("neo4j.url", "neo4j://127.0.0.1:7687") \
     .config("neo4j.authentication.basic.username", "neo4j") \
     .config("neo4j.authentication.basic.password", "password") \
     .config("spark.jars.packages", "org.neo4j:neo4j-connector-apache-spark_2.13:5.3.10_for_spark_3") \
-    .config("spark.master", "local[1]") \
-    .config("spark.executor.cores", "1") \
     .getOrCreate()
 #.config( "spark.jars.repositories", "https://repo1.maven.org/maven2/,https://s01.oss.sonatype.org/content/repositories/releases/") \
     #, io.graphframes:graphframes-spark4_2.13:0.10.0
