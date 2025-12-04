@@ -9,12 +9,12 @@ prep = os.path.join(f"{os.getcwd()}/prep")
 for folder in os.listdir(prep):
     folder = os.path.join(prep, folder)
     for file in os.listdir(folder):
-        file = os.path.join(folder, file)
+        file_path = os.path.join(folder, file)
 
         if file == "log.txt":
-            os.remove(file)
+            os.remove(file_path)
         else:
-            name, ext = os.path.splitext(file)
+            name, ext = os.path.splitext(file_path)
             os.rename(f"{name}{ext}", f"{name} ({count}){ext}")
 
     count += 1
