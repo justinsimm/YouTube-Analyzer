@@ -10,7 +10,7 @@ os.environ["PYSPARK_DRIVER_PYTHON"] = python_executable
 #.config("spark.jars.packages", "org.neo4j:neo4j-connector-apache-spark_2.13:5.3.10_for_spark_3") \
 os.environ["HADOOP_HOME"] = r"C:\hadoop"
 spark = SparkSession.builder \
-    .master("spark://68.234.244.60:7077") \
+    .master("spark://192.168.1.41:7077") \
     .config("neo4j.url", "neo4j://127.0.0.1:7687") \
     .config("neo4j.authentication.basic.username", "neo4j") \
     .config("neo4j.authentication.basic.password", "password") \
@@ -23,15 +23,19 @@ spark = SparkSession.builder \
 #from graphframes import GraphFrame
 
 def top_k(k, dataframe, field):
+    start = time.time()
     newDF = dataframe
     if field == "category":
         newDF.groupBy(field).count().orderBy("count", ascending=False).show(k)
     else:
         newDF.sort(field, ascending=False).show(k)
+    end = time.time()
+    length = end - start
+    print(f"The process took {round(length, 2)} seconds")
 
-def find_in_range(start, end, field, dataframe):
+def find_in_range(start, end, field, dataframe, n):
     newDF = dataframe
-    newDF.filter(f"{field} > {start} AND {field} < {end}").orderBy(field, ascending=False).show()
+    newDF.filter(f"{field} > {start} AND {field} < {end}").orderBy(field, ascending=False).show(n)
 
 def run_top_k(uri, user, password, database, k, searchField):
     vertices = (
@@ -47,9 +51,9 @@ def run_top_k(uri, user, password, database, k, searchField):
         .load()
     )
     theDF = vertices.dropna(how="any")
-    return top_k(k, theDF, searchField)
+    top_k(k, theDF, searchField)
 
-def run_find_in_range(uri, user, password, database, start, end, searchField):
+def run_find_in_range(uri, user, password, database, start, end, searchField, n):
     vertices = (
         spark.read.format("org.neo4j.spark.DataSource")
         .option("url", uri)
@@ -60,9 +64,11 @@ def run_find_in_range(uri, user, password, database, start, end, searchField):
         .load()
     )
     theDF = vertices.dropna(how="any")
-    return find_in_range(start, end, searchField, theDF)
+    find_in_range(start, end, searchField, theDF, n)
 
-""" def main():
+
+
+def main():
     #nodes = fetchNodes("neo4j://127.0.0.1:7687", "neo4j", "password")
     #print(nodes)
     #edges = fetchEdges("neo4j://127.0.0.1:7687", "neo4j", "password")
@@ -114,4 +120,4 @@ def run_find_in_range(uri, user, password, database, start, end, searchField):
     #graph.vertices.orderBy("views", ascending=False).show(10)
 
 if __name__ == "__main__":
-    main() """
+    main()

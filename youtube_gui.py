@@ -153,14 +153,14 @@ class YouTubeAnalyzerGUI(tk.Tk):
             row=5, column=0, columnspan=2, pady=10
         )
 
+        # -- Find in Range -- #
+
         ttk.Label(
             search_group,
             text="Find in Range",
             foreground="black",
         ).grid(row=6, column=0, columnspan=2, sticky="w", padx=5, pady=(0, 5))
 
-
-        #implementation of find in range
         ttk.Label(search_group, text="Start:").grid(row=7, column=0, sticky="e", padx=5, pady=5)
         self.start_var = tk.IntVar(value=10)
         ttk.Entry(search_group, textvariable=self.start_var, width=10).grid(
@@ -173,8 +173,14 @@ class YouTubeAnalyzerGUI(tk.Tk):
             row=8, column=1, sticky="w", padx=5, pady=5
         )
 
+        ttk.Label(search_group, text="Size:").grid(row=9, column=0, sticky="e", padx=5, pady=5)
+        self.table_size_var = tk.IntVar(value=10)
+        ttk.Entry(search_group, textvariable=self.table_size_var, width=10).grid(
+            row=9, column=1, sticky="w", padx=5, pady=5
+        )
+
         ttk.Button(search_group, text="Run Search", command=self._on_run_search_range).grid(
-            row=9, column=0, columnspan=2, pady=10
+            row=10, column=0, columnspan=2, pady=10
         )
 
     # -- Network Aggregation -- #
@@ -272,7 +278,7 @@ class YouTubeAnalyzerGUI(tk.Tk):
         pwd = self.neo_pass_var.get()
         dbname = self.neo_dbname_var.get()
 
-        self.log(f"Running search: metric={metric}, k={k}, neo4j={uri} ...")
+        self.log(f"Running top k search: metric={metric}, k={k}, neo4j={uri} ...")
         t = threading.Thread(
             target=self._run_search_work, args=(metric, k, uri, user, pwd, dbname), daemon=True
         )
@@ -282,7 +288,8 @@ class YouTubeAnalyzerGUI(tk.Tk):
         try:
             start = self.start_var.get()
             end = self.end_var.get()
-            if start > end or start == end or start < 0 or end < 0:
+            size = self.table_size_var.get()
+            if start > end or start == end or start < 0 or end < 0 or size < 0:
                 raise ValueError
         except Exception:
             messagebox.showerror("Inavlid entry for start or end", "Please enter a valid integer amount for start and end (ex. 1-100)")
@@ -293,9 +300,9 @@ class YouTubeAnalyzerGUI(tk.Tk):
         user = self.neo_user_var.get()
         pwd = self.neo_pass_var.get()
 
-        self.log(f"Running search: metric={metric}, start={start}, end={end}, neo4j={uri} ...")
+        self.log(f"Running find in range search: metric={metric}, start={start}, end={end}, neo4j={uri} ...")
         t = threading.Thread(
-            target=self._run_search_work_range, args=(metric, start, end, uri, user, pwd), daemon=True
+            target=self._run_search_work_range, args=(metric, start, end, uri, user, pwd, size), daemon=True
         )
         t.start()
 
@@ -403,7 +410,7 @@ class YouTubeAnalyzerGUI(tk.Tk):
         except ImportError as e:
             self.log(f"ERROR: Could not import youtube_search.py: {e}")
 
-    def _run_search_work_range(self, metric, start, end, uri, user, pwd):
+    def _run_search_work_range(self, metric, start, end, uri, user, pwd, size):
         try:
             import youtube_search
 
