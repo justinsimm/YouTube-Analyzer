@@ -3,7 +3,7 @@ import shutil
 import pathlib
 
 count = 0
-prep = os.path.join(f"{os.getcwd()}\prep")
+prep = os.path.join(f"{os.getcwd()}/prep")
 
 #Rename files so there are no duplicate names and no logs
 for folder in os.listdir(prep):
